@@ -19,7 +19,10 @@ else
     goto endThread
 end
 
-event = false
+event  = false
+canvas = {
+    operations = "",
+}
 
 while true do
     love.timer.sleep(0.0001)
@@ -38,9 +41,13 @@ while true do
     if event then
         if event.type == "receive" then
             --log("Got message from ", event.peer, event.data)
+            canvas.operations = canvas.operations..event.data
             host:broadcast(event.data)
         elseif event.type == "connect" then
             log("Connection attempt from ", event.peer)
+            if canvas.operations ~= "" then
+                event.peer:send(canvas.operations)
+            end
         elseif event.type == "disconnect" then
             log("Disconnection", event.peer)
         end

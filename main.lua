@@ -12,9 +12,10 @@ function love.load ()
 
     -- Network --
 
-    username, hostip, port = "", "", "2048"
+    username, serverip, port = "", "", "2048"
     host   = enet.host_create()
     server = false
+    timeBeginConnection = 0
 
     serverThread  = love.thread.newThread("server.lua")
     serverChannel = false
@@ -23,15 +24,15 @@ function love.load ()
     -- Main menu --
 
     function checkCredentials ()
-        if USERNAME == "" then
+        if username == "" then
             hostButton:SetEnabled(false)
             joinButton:SetEnabled(false)
         else
             local portn = tonumber(port) or 2048
             if portn <= 65535 then
                 hostButton:SetEnabled(true)
-                if HOST ~= "" then
-                    local chunks = {hostip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$")}
+                if serverip ~= "" then
+                    local chunks = { serverip:match("^(%d+)%.(%d+)%.(%d+)%.(%d+)$") }
                     if #chunks == 4 then
                         for _,v in pairs(chunks) do
                             if tonumber(v) > 255 then
@@ -54,7 +55,7 @@ function love.load ()
     frame = loveframes.Create("frame")
     frame:SetName("Play")
     frame:SetWidth(400)
-    frame:SetHeight(120)
+    frame:SetHeight(190)
     frame:Center()
     frame:SetDraggable(false)
     frame:ShowCloseButton(false)
@@ -83,7 +84,7 @@ function love.load ()
     hostInput:SetUsable({"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "."})
     hostInput:SetPlaceholderText("Host IP (IPv4 only)")
     hostInput.OnTextChanged = function (object)
-        hostip = object:GetText()
+        serverip = object:GetText()
         checkCredentials()
     end
 
@@ -112,6 +113,20 @@ function love.load ()
     hostButton:SetPos(202.5, 90)
     hostButton:SetEnabled(false)
 
+    textError = loveframes.Create("text", frame)
+    textError:SetWidth(390)
+    textError:SetPos(5, 120)
+
+    textInfo = loveframes.Create("text", frame)
+    textInfo:SetWidth(390)
+    textInfo:SetPos(5, 150)
+    textInfo:SetLinksEnabled(true)
+    textInfo:SetDetectLinks(true)
+    textInfo:SetText("Fantasmagorique is a collaborative drawing game, made by A.Decimo. http://github.com/MisterDA/Fantasmagorique")
+    textInfo.OnClickLink = function (object, link)
+        love.system.openURL(link)
+    end
+
 
     -- Game --
 
@@ -131,10 +146,17 @@ function love.update (dt)
             end
             server:send(
                 tostring(mouse.x)..":"..tostring(mouse.y)..":"..
-                tostring(love.mouse.getX()) ..":"..tostring(love.mouse.getY()))
+                tostring(love.mouse.getX()) ..":"..tostring(love.mouse.getY())..":")
             mouse.x, mouse.y = love.mouse.getPosition()
         else
             mouse.x = -1
+        end
+    elseif state == "mainmenu" then
+        if server and server:state() == "connecting"
+            and os.time() - timeBeginConnection > 5 then
+            log("Could not reach server.")
+            textError:SetText({{color = {255, 0, 0}}, "Could not reach server."})
+            server:reset()
         end
     end
 
@@ -144,12 +166,16 @@ function love.update (dt)
             --log("Got message from", event.peer, event.data)
             if state == "game" then
                 love.graphics.setCanvas(canvas)
-                ox, oy, x, y = string.match(event.data, "(%d+):(%d+):(%d+):(%d+)")
-                love.graphics.line(ox, oy, x, y)
+                for data in string.gmatch(event.data, "(%d+:%d+:%d+:%d+:)") do
+                    ox, oy, x, y = string.match(data, "(%d+):(%d+):(%d+):(%d+):")
+                    love.graphics.line(ox, oy, x, y)
+                end
                 love.graphics.setCanvas()
             end
         elseif event.type == "connect" then
             log("Connection attempt to", event.peer)
+            state = "game"
+            loveframes.SetState(state)
         elseif event.type == "disconnect" then
             log("Disconnection from", event.peer)
         end
@@ -167,25 +193,24 @@ function love.draw ()
 end
 
 function joinServer ()
-    state = "game"
-    loveframes.SetState(state)
-
-    server = host:connect(hostip..":"..port)
+    server = host:connect(serverip..":"..port)
+    timeBeginConnection = os.time()
 end
 
 function hostServer ()
-    hostip = "127.0.0.1"
+    serverip = "127.0.0.1"
     serverThread:start(port)
     serverChannel = love.thread.getChannel("server")
 
     local hasStarted = serverChannel:demand()
     if hasStarted then
-        server = host:connect(hostip..":"..port)
-        state = "game"
-        loveframes.SetState(state)
+        textError:SetText("")
+        server = host:connect(serverip..":"..port)
+        timeBeginConnection = os.time()
     else
+        textError:SetText({{color ={255, 0, 0}}, "Could not start server."})
         server = false
-        serverThread = false
+        serverThread  = love.thread.newThread("server.lua")
         serverChannel = false
     end
 end

@@ -117,21 +117,35 @@ function love.load ()
 
     love.graphics.setColor(255, 255, 255)
     canvas = love.graphics.newCanvas()
+    mouse = {
+        x = -1,
+        y = -1,
+    }
 end
 
 function love.update (dt)
     if state == "game" then
-        x, y = 0, 0
+        if love.mouse.isDown('l') then
+            if mouse.x == -1 then
+                mouse.x, mouse.y = love.mouse.getPosition()
+            end
+            server:send(
+                tostring(mouse.x)..":"..tostring(mouse.y)..":"..
+                tostring(love.mouse.getX()) ..":"..tostring(love.mouse.getY()))
+            mouse.x, mouse.y = love.mouse.getPosition()
+        else
+            mouse.x = -1
+        end
     end
 
     local event = host:service()
     if event then
         if event.type == "receive" then
-            log("Got message from", event.peer, event.data)
+            --log("Got message from", event.peer, event.data)
             if state == "game" then
                 love.graphics.setCanvas(canvas)
-                x, y = string.match(event.data, "(%d+):(%d+)")
-                love.graphics.circle("fill", x, y, 10, 100)
+                ox, oy, x, y = string.match(event.data, "(%d+):(%d+):(%d+):(%d+)")
+                love.graphics.line(ox, oy, x, y)
                 love.graphics.setCanvas()
             end
         elseif event.type == "connect" then
@@ -174,8 +188,6 @@ function hostServer ()
         serverThread = false
         serverChannel = false
     end
-
-    log(state)
 end
 
 function love.quit ()
@@ -189,9 +201,6 @@ function love.quit ()
 end
 
 function love.mousepressed (x, y, button)
-    if state == "game" then
-        server:send(tostring(x)..":"..tostring(y))
-    end
 
     loveframes.mousepressed (x, y, button)
 end
@@ -204,10 +213,6 @@ end
 function love.keypressed (key, unicode)
     if key == "escape" then
         love.event.quit()
-    end
-
-    if state == "game" then
-        server:send(key)
     end
 
     loveframes.keypressed(key, unicode)

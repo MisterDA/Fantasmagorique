@@ -37,7 +37,7 @@ while true do
     event = host:service()
     if event then
         if event.type == "receive" then
-            log("Got message from ", event.peer, event.data)
+            --log("Got message from ", event.peer, event.data)
             host:broadcast(event.data)
         elseif event.type == "connect" then
             log("Connection attempt from ", event.peer)
